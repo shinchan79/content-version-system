@@ -21,22 +21,23 @@ export interface ContentState {
   publishHistory: PublishRecord[];
 }
 
-export interface CreateVersionParams {
-  content: string;
-  message?: string;
-}
-
-export interface RevertParams {
-  versionId: number;
-}
-
-export interface TagParams {
-  versionId: number;
-  tagName: string;
-}
-
-export interface DeleteVersionParams {
-  versionId: number;
+export interface ContentDiff {
+  from: string;
+  to: string;
+  changes: {
+    additions: number;
+    deletions: number;
+    totalChanges: number;
+    timestamp: string;
+  };
+  patch: string;
+  hunks: Array<{
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
 }
 
 export interface PublishRecord {
@@ -45,35 +46,26 @@ export interface PublishRecord {
   publishedBy: string;
 }
 
-export interface PublishVersionParams {
-  versionId: number;
-  publishedBy: string;
-}
-
+// Response types
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-export interface ContentDiff {
-  from: string;
-  to: string;
-  changes: {
-      additions: number;
-      deletions: number;
-      totalChanges: number;
-      timestamp: string;
-  };
-  patch: string;
-  hunks: Array<{
-      oldStart: number;
-      oldLines: number;
-      newStart: number;
-      newLines: number;
-      lines: string[];
-  }>;
+export interface DeleteVersionResponse {
+  success: boolean;
+  message: string;
 }
 
-export interface VersionResponse extends ApiResponse<Version> {}
-export interface ListVersionsResponse extends ApiResponse<Version[]> {}
+export interface TagResponse {
+  tagName: string;
+  versionId: number;
+}
+
+export interface CurrentVersionResponse {
+  version: number;
+  content: string | null;
+}
+
+export type VersionListItem = Omit<Version, 'content' | 'diff'>;
