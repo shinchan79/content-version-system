@@ -1,5 +1,5 @@
 import { createPatch } from 'diff';
-import { ContentDiff, ContentState, Version, PublishRecord, VersionStatus } from './types';
+import { ContentDiff, ContentState, Version, PublishRecord, VersionStatus, Tag } from './types';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,108 +52,106 @@ export class ContentDO {
     console.log('Handling path:', request.method, path);
 
     switch (`${request.method} ${path}`) {
+      // Version endpoints
       case 'POST content': {
         const { content, message } = await request.json();
         const version = await this.createVersion(content, message);
         return Response.json(version);
       }
 
-      case `GET content/${parts[1]}/diff`: {
+      case 'GET content/default': {
         const data = await this.initialize();
-        const latestVersion = data.versions[data.versions.length - 1];
-        const previousVersion = data.versions[data.versions.length - 2];
-        if (!latestVersion || !previousVersion) {
-            throw new Error("Not enough versions to compare");
+        if (!data.currentVersion) {
+          return Response.json(null);
         }
-        return await this.getDiff(previousVersion.id, latestVersion.id);
-      }
-
-      case `GET content/${parts[1]}/versions/${parts[3]}/diff`: {
-        const url = new URL(request.url);
-        const compareWithVersion = url.searchParams.get('compare');
-        const versionId = parseInt(parts[3]);
-        
-        if (compareWithVersion) {
-            return await this.getDiff(parseInt(compareWithVersion), versionId);
-        } else {
-            return await this.getDiff(versionId - 1, versionId);
-        }
-      }
-
-      case `PUT content/${parts[1]}`: {
-        const { content, message } = await request.json();
-        const version = await this.createVersion(content, message);
+        const version = await this.getVersion(data.currentVersion);
         return Response.json(version);
       }
 
-      case `GET content/${parts[1]}/versions`: {
+      case 'GET content/default/versions': {
         const versions = await this.getVersions();
-        console.log('Returning versions:', versions); // Debug log
         return Response.json(versions);
       }
 
-      case `GET content/${parts[1]}/versions/${parts[3]}`: {
+      case `GET content/default/versions/${parts[3]}`: {
         const version = await this.getVersion(parseInt(parts[3]));
         return Response.json(version);
       }
 
-      case `DELETE content/${parts[1]}/versions/${parts[3]}`: {
+      case `DELETE content/default/versions/${parts[3]}`: {
         const versionId = parseInt(parts[3]);
         const result = await this.deleteVersion(versionId);
         return Response.json(result);
       }
 
-      case `POST content/${parts[1]}/versions/${parts[3]}/publish`: {
+      // Tag endpoints
+      case 'GET content/versions/tags': {
+        const tags = await this.getTags();
+        return Response.json(tags);
+      }
+
+      case `GET content/versions/${parts[2]}/tags`: {
+        const versionId = parseInt(parts[2]);
+        const tags = await this.getVersionTags(versionId);
+        return Response.json(tags);
+      }
+
+      case 'POST content/versions/tags': {
+        const { versionId, name } = await request.json();
+        const tag = await this.createTag(versionId, name);
+        return Response.json(tag);
+      }
+
+      case `PUT content/versions/tags/${parts[3]}`: {
+        const { newName } = await request.json();
+        const tag = await this.updateTag(parts[3], newName);
+        return Response.json(tag);
+      }
+
+      case `DELETE content/versions/tags/${parts[3]}`: {
+        const result = await this.deleteTag(parts[3]);
+        return Response.json(result);
+      }
+
+      // Publish endpoints
+      case `POST content/default/versions/${parts[3]}/publish`: {
         const { publishedBy } = await request.json();
         const result = await this.publishVersion(parseInt(parts[3]), publishedBy);
         return Response.json(result);
       }
 
-      case `POST content/${parts[1]}/versions/${parts[3]}/unpublish`: {
+      case `POST content/default/versions/${parts[3]}/unpublish`: {
         const result = await this.unpublishVersion(parseInt(parts[3]));
         return Response.json(result);
       }
 
-      case `POST content/${parts[1]}/revert`: {
+      case 'GET content/default/publish-history': {
+        const history = await this.getPublishHistory();
+        return Response.json(history);
+      }
+
+      // Diff endpoints
+      case `GET content/default/versions/${parts[3]}/diff`: {
+        const compareToId = parseInt(new URL(request.url).searchParams.get('compare') || '0');
+        if (compareToId) {
+          return await this.getDiff(parseInt(parts[3]), compareToId);
+        }
+        const diff = await this.compareVersions(parseInt(parts[3]), parseInt(parts[3]) - 1);
+        return Response.json(diff);
+      }
+
+      case `POST content/default/revert`: {
         const { versionId } = await request.json();
         const version = await this.revertTo(versionId);
         return Response.json(version);
       }
 
-      case `POST content/${parts[1]}/tags`: {
-        const { versionId, tagName } = await request.json();
-        const tag = await this.addTag(versionId, tagName);
-        return Response.json(tag);
-      }
-
-      case `GET content/${parts[1]}/publish-history`: {
-        const history = await this.getPublishHistory();
-        return Response.json(history);
-      }
-
-      case `GET content/${parts[1]}/compare`: {
-        const url = new URL(request.url);
-        const fromId = parseInt(url.searchParams.get('from') || '');
-        const toId = parseInt(url.searchParams.get('to') || '');
-        
-        if (isNaN(fromId) || isNaN(toId)) {
-          return new Response('Invalid version IDs', { status: 400 });
-        }
-
-        const diff = await this.compareVersions(fromId, toId);
-        return Response.json(diff);
-      }
-
       default:
-        console.log('No route matched:', request.method, path);
-        return new Response(`No route matched: ${request.method} ${path}`, { 
-          status: 404, 
-          headers: corsHeaders 
-        });
+        return new Response('No route matched: ' + request.method + ' ' + path, { status: 404 });
     }
   }
 
-  async initialize(): Promise<ContentState> {
+  private async initialize(): Promise<ContentState> {
     const stored = await this.state.storage.get<ContentState>("content");
     if (!stored) {
       const initialData: ContentState = {
@@ -166,53 +164,33 @@ export class ContentDO {
       await this.state.storage.put("content", initialData);
       return initialData;
     }
-    if (!stored.publishHistory) {
-      stored.publishHistory = [];
-    }
     return stored;
   }
 
-  async createVersion(content: string, message?: string): Promise<Version> {
+  // Version operations
+  async createVersion(content: string, message: string = ""): Promise<Version> {
     const data = await this.initialize();
-    const maxId = Math.max(...data.versions.map(v => v.id), 0);
-
+    
     const newVersion: Version = {
-        id: maxId + 1,
-        content: content,
-        timestamp: new Date().toISOString(),
-        message: message || 'New version',
-        status: VersionStatus.DRAFT
+      id: data.versions.length + 1,
+      content,
+      timestamp: new Date().toISOString(),
+      message,
+      status: VersionStatus.DRAFT,
+      diff: data.content ? this.calculateDetailedDiff(data.content, content) : null
     };
 
-    if (data.versions.length > 0) {
-        const previousVersion = data.versions[data.versions.length - 1];
-        const diffResult = createPatch('content.txt',
-            previousVersion.content,
-            content,
-            `Version ${previousVersion.id}`,
-            `Version ${newVersion.id}`
-        );
-
-        const additions = (diffResult.match(/^\+/gm) || []).length - 1;
-        const deletions = (diffResult.match(/^-/gm) || []).length - 1;
-
-        newVersion.diff = {
-            from: previousVersion.content,
-            to: content,
-            changes: {
-                additions: additions,
-                deletions: deletions,
-                totalChanges: additions + deletions,
-                timestamp: new Date().toISOString()
-            },
-            patch: diffResult,
-            hunks: []
-        };
-    }
-
     data.versions.push(newVersion);
+    data.currentVersion = newVersion.id;
+    data.content = content;
+
     await this.state.storage.put("content", data);
     return newVersion;
+  }
+
+  async getVersion(id: number): Promise<Version | null> {
+    const data = await this.initialize();
+    return data.versions.find(v => v.id === id) || null;
   }
 
   async getVersions(): Promise<Version[]> {
@@ -220,86 +198,115 @@ export class ContentDO {
     return data.versions;
   }
 
-  async getVersion(versionId: number): Promise<Version> {
+  async deleteVersion(id: number): Promise<{ success: boolean; message: string }> {
     const data = await this.initialize();
-    const version = data.versions.find(v => v.id === versionId);
-    if (!version) {
-      throw new Error("Version not found");
-    }
-    return version;
-  }
-
-  async revertTo(versionId: number): Promise<Version> {
-    const data = await this.initialize();
-    const targetVersion = data.versions.find(v => v.id === versionId);
-    if (!targetVersion) {
-      throw new Error("Version not found");
-    }
-
-    return await this.createVersion(targetVersion.content, `Reverted to version ${versionId}`);
-  }
-
-  async addTag(versionId: number, tagName: string): Promise<{ tagName: string; versionId: number }> {
-    const data = await this.initialize();
-    const version = data.versions.find(v => v.id === versionId);
-    if (!version) {
-      throw new Error("Version not found");
-    }
-
-    data.tags[tagName] = versionId;
-    await this.state.storage.put("content", data);
-    return { tagName, versionId };
-  }
-
-  async deleteVersion(versionId: number): Promise<{ success: boolean, message: string }> {
-    const data = await this.initialize();
+    const versionIndex = data.versions.findIndex(v => v.id === id);
     
-    if (versionId === data.currentVersion) {
-      throw new Error("Cannot delete current version");
-    }
-
-    const versionIndex = data.versions.findIndex(v => v.id === versionId);
     if (versionIndex === -1) {
       throw new Error("Version not found");
     }
 
-    // Check if version is published
-    const version = data.versions[versionIndex];
-    if (version.status === VersionStatus.PUBLISHED) {
-      throw new Error("Cannot delete a published version");
-    }
-
+    // Remove version
     data.versions.splice(versionIndex, 1);
 
-    if (versionIndex < data.versions.length) {
-      const prevContent = versionIndex > 0 
-        ? data.versions[versionIndex - 1].content 
-        : "";
-      data.versions[versionIndex].diff = this.calculateDetailedDiff(
-        prevContent,
-        data.versions[versionIndex].content
-      );
+    // Update current version if needed
+    if (data.currentVersion === id) {
+      const lastVersion = data.versions[data.versions.length - 1];
+      data.currentVersion = lastVersion ? lastVersion.id : 0;
+      data.content = lastVersion ? lastVersion.content : null;
     }
 
-    for (const [tag, tagVersionId] of Object.entries(data.tags)) {
-      if (tagVersionId === versionId) {
-        delete data.tags[tag];
+    // Remove related tags
+    Object.entries(data.tags).forEach(([tagName, tag]) => {
+      if (tag.versionId === id) {
+        delete data.tags[tagName];
       }
-    }
-
-    if (data.publishHistory) {
-      data.publishHistory = data.publishHistory.filter(
-        record => record.versionId !== versionId
-      );
-    }
+    });
 
     await this.state.storage.put("content", data);
-    return { 
-      success: true, 
-      message: `Version ${versionId} deleted successfully` 
+
+    return {
+      success: true,
+      message: `Version ${id} deleted successfully`
     };
   }
 
+  // Tag operations
+  async getTags(): Promise<Tag[]> {
+    const data = await this.initialize();
+    return Object.values(data.tags);
+  }
+
+  async getVersionTags(versionId: number): Promise<Tag[]> {
+    const data = await this.initialize();
+    return Object.values(data.tags).filter(tag => tag.versionId === versionId);
+  }
+
+  async createTag(versionId: number, name: string): Promise<Tag> {
+    const data = await this.initialize();
+    
+    const version = data.versions.find(v => v.id === versionId);
+    if (!version) {
+      throw new Error("Version not found");
+    }
+
+    if (data.tags[name]) {
+      throw new Error("Tag name already exists");
+    }
+
+    const newTag: Tag = {
+      name,
+      versionId,
+      createdAt: new Date().toISOString()
+    };
+
+    data.tags[name] = newTag;
+    await this.state.storage.put("content", data);
+    return newTag;
+  }
+
+  async updateTag(oldName: string, newName: string): Promise<Tag> {
+    const data = await this.initialize();
+    
+    const oldTag = data.tags[oldName];
+    if (!oldTag) {
+      throw new Error("Tag not found");
+    }
+
+    if (oldName !== newName && data.tags[newName]) {
+      throw new Error("New tag name already exists");
+    }
+
+    const updatedTag: Tag = {
+      ...oldTag,
+      name: newName,
+      updatedAt: new Date().toISOString()
+    };
+
+    delete data.tags[oldName];
+    data.tags[newName] = updatedTag;
+
+    await this.state.storage.put("content", data);
+    return updatedTag;
+  }
+
+  async deleteTag(name: string): Promise<{ success: boolean; message: string }> {
+    const data = await this.initialize();
+    
+    if (!data.tags[name]) {
+      throw new Error("Tag not found");
+    }
+
+    delete data.tags[name];
+    await this.state.storage.put("content", data);
+
+    return {
+      success: true,
+      message: `Tag ${name} deleted successfully`
+    };
+  }
+
+  // Publish operations
   async publishVersion(versionId: number, publishedBy: string): Promise<PublishRecord> {
     const data = await this.initialize();
     
@@ -370,6 +377,7 @@ export class ContentDO {
     return data.publishHistory || [];
   }
 
+  // Diff operations
   async compareVersions(fromId: number, toId: number): Promise<ContentDiff> {
     const data = await this.initialize();
     
@@ -414,32 +422,45 @@ export class ContentDO {
     const toVersion = data.versions.find(v => v.id === toVersionId);
     
     if (!fromVersion || !toVersion) {
-        throw new Error("Version not found");
+      throw new Error("Version not found");
     }
 
     const formattedDiff = [
-        `Comparing Version ${fromVersion.id} -> Version ${toVersion.id}`,
-        `From: ${fromVersion.message}`,
-        `To: ${toVersion.message}`,
-        '\nContent in Version ' + fromVersion.id + ':',
-        fromVersion.content,
-        '\nContent in Version ' + toVersion.id + ':',
-        toVersion.content,
-        '\nDifferences:',
-        '===================================================================',
-        createPatch('content.txt',
-            fromVersion.content || '',
-            toVersion.content || '',
-            `Version ${fromVersion.id} (${fromVersion.message})`,
-            `Version ${toVersion.id} (${toVersion.message})`
-        )
+      `Comparing Version ${fromVersion.id} -> Version ${toVersion.id}`,
+      `From: ${fromVersion.message}`,
+      `To: ${toVersion.message}`,
+      '\nContent in Version ' + fromVersion.id + ':',
+      fromVersion.content,
+      '\nContent in Version ' + toVersion.id + ':',
+      toVersion.content,
+      '\nDifferences:',
+      '===================================================================',
+      createPatch('content.txt',
+        fromVersion.content || '',
+        toVersion.content || '',
+        `Version ${fromVersion.id} (${fromVersion.message})`,
+        `Version ${toVersion.id} (${toVersion.message})`
+      )
     ].join('\n');
 
     return new Response(formattedDiff, {
-        headers: {
-            'Content-Type': 'text/plain',
-            'Access-Control-Allow-Origin': '*',
-        }
+      headers: {
+        'Content-Type': 'text/plain',
+        'Access-Control-Allow-Origin': '*',
+      }
     });
+  }
+
+  async revertTo(versionId: number): Promise<Version> {
+    const data = await this.initialize();
+    const targetVersion = data.versions.find(v => v.id === versionId);
+    if (!targetVersion) {
+      throw new Error("Version not found");
+    }
+
+    return await this.createVersion(
+      targetVersion.content, 
+      `Reverted to version ${versionId}`
+    );
   }
 }

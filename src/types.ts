@@ -13,10 +13,17 @@ export interface Version {
   status: VersionStatus;
 }
 
+export interface Tag {
+  name: string;
+  versionId: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface ContentState {
   currentVersion: number;
   versions: Version[];
-  tags: Record<string, number>;
+  tags: { [key: string]: Tag };
   content: string | null;
   publishHistory: PublishRecord[];
 }
