@@ -52,7 +52,6 @@ export class ContentDO {
     console.log('Handling path:', request.method, path);
 
     switch (`${request.method} ${path}`) {
-      // Version endpoints
       case 'POST content': {
         const { content, message } = await request.json();
         const version = await this.createVersion(content, message);
@@ -84,7 +83,6 @@ export class ContentDO {
         return Response.json(result);
       }
 
-      // Tag endpoints
       case 'GET content/versions/tags': {
         const tags = await this.getTags();
         return Response.json(tags);
@@ -113,7 +111,6 @@ export class ContentDO {
         return Response.json(result);
       }
 
-      // Publish endpoints
       case `POST content/default/versions/${parts[3]}/publish`: {
         const { publishedBy } = await request.json();
         const result = await this.publishVersion(parseInt(parts[3]), publishedBy);
@@ -130,7 +127,6 @@ export class ContentDO {
         return Response.json(history);
       }
 
-      // Diff endpoints
       case `GET content/default/versions/${parts[3]}/diff`: {
         const compareToId = parseInt(new URL(request.url).searchParams.get('compare') || '0');
         if (compareToId) {
@@ -167,12 +163,17 @@ export class ContentDO {
     return stored;
   }
 
-  // Version operations
+  private getNextVersionId(data: ContentState): number {
+    return data.versions.length > 0 
+      ? Math.max(...data.versions.map(v => v.id)) + 1 
+      : 1;
+  }
+
   async createVersion(content: string, message: string = ""): Promise<Version> {
     const data = await this.initialize();
     
     const newVersion: Version = {
-      id: data.versions.length + 1,
+      id: this.getNextVersionId(data),
       content,
       timestamp: new Date().toISOString(),
       message,
@@ -188,106 +189,115 @@ export class ContentDO {
     return newVersion;
   }
 
-  async getVersion(id: number): Promise<Version | null> {
-    const data = await this.initialize();
-    return data.versions.find(v => v.id === id) || null;
-  }
-
   async getVersions(): Promise<Version[]> {
     const data = await this.initialize();
     return data.versions;
   }
 
-  async deleteVersion(id: number): Promise<{ success: boolean; message: string }> {
+  async getVersion(id: number): Promise<Version | null> {
     const data = await this.initialize();
-    const versionIndex = data.versions.findIndex(v => v.id === id);
+    return data.versions.find(v => v.id === id) || null;
+  }
+
+  async deleteVersion(id: number): Promise<{ success: boolean }> {
+    const data = await this.initialize();
     
+    const versionIndex = data.versions.findIndex(v => v.id === id);
     if (versionIndex === -1) {
       throw new Error("Version not found");
     }
 
-    // Remove version
-    data.versions.splice(versionIndex, 1);
-
-    // Update current version if needed
-    if (data.currentVersion === id) {
-      const lastVersion = data.versions[data.versions.length - 1];
-      data.currentVersion = lastVersion ? lastVersion.id : 0;
-      data.content = lastVersion ? lastVersion.content : null;
+    const version = data.versions[versionIndex];
+    if (version.status === VersionStatus.PUBLISHED) {
+      throw new Error("Cannot delete published version");
     }
 
-    // Remove related tags
-    Object.entries(data.tags).forEach(([tagName, tag]) => {
-      if (tag.versionId === id) {
+    data.versions.splice(versionIndex, 1);
+
+    if (data.currentVersion === id) {
+      data.currentVersion = 0;
+      data.content = null;
+    }
+
+    // Remove any tags associated with this version
+    for (const tagName in data.tags) {
+      if (data.tags[tagName].versionId === id) {
         delete data.tags[tagName];
       }
-    });
+    }
 
     await this.state.storage.put("content", data);
 
     return {
-      success: true,
-      message: `Version ${id} deleted successfully`
+      success: true
     };
   }
 
-  // Tag operations
   async getTags(): Promise<Tag[]> {
     const data = await this.initialize();
-    return Object.values(data.tags);
+    return Object.entries(data.tags).map(([name, tag]) => ({
+      name,
+      ...tag
+    }));
   }
 
   async getVersionTags(versionId: number): Promise<Tag[]> {
     const data = await this.initialize();
-    return Object.values(data.tags).filter(tag => tag.versionId === versionId);
+    return Object.entries(data.tags)
+      .filter(([_, tag]) => tag.versionId === versionId)
+      .map(([name, tag]) => ({
+        name,
+        ...tag
+      }));
   }
 
   async createTag(versionId: number, name: string): Promise<Tag> {
     const data = await this.initialize();
     
+    if (data.tags[name]) {
+      throw new Error("Tag already exists");
+    }
+
     const version = data.versions.find(v => v.id === versionId);
     if (!version) {
       throw new Error("Version not found");
     }
 
-    if (data.tags[name]) {
-      throw new Error("Tag name already exists");
-    }
-
-    const newTag: Tag = {
+    const tag: Tag = {
       name,
       versionId,
       createdAt: new Date().toISOString()
     };
 
-    data.tags[name] = newTag;
+    data.tags[name] = tag;
     await this.state.storage.put("content", data);
-    return newTag;
+
+    return tag;
   }
 
-  async updateTag(oldName: string, newName: string): Promise<Tag> {
+  async updateTag(name: string, newName: string): Promise<Tag> {
     const data = await this.initialize();
     
-    const oldTag = data.tags[oldName];
-    if (!oldTag) {
+    if (!data.tags[name]) {
       throw new Error("Tag not found");
     }
 
-    if (oldName !== newName && data.tags[newName]) {
+    if (data.tags[newName]) {
       throw new Error("New tag name already exists");
     }
 
-    const updatedTag: Tag = {
-      ...oldTag,
-      name: newName,
-      updatedAt: new Date().toISOString()
+    const tag = data.tags[name];
+    delete data.tags[name];
+    data.tags[newName] = {
+      ...tag,
+      name: newName
     };
 
-    delete data.tags[oldName];
-    data.tags[newName] = updatedTag;
-
     await this.state.storage.put("content", data);
-    return updatedTag;
+    return {
+      ...data.tags[newName],
+      name: newName
+    };
   }
 
   async deleteTag(name: string): Promise<{ success: boolean; message: string }> {
@@ -306,7 +316,6 @@ export class ContentDO {
     };
   }
 
-  // Publish operations
   async publishVersion(versionId: number, publishedBy: string): Promise<PublishRecord> {
     const data = await this.initialize();
     
@@ -377,7 +386,6 @@ export class ContentDO {
     return data.publishHistory || [];
   }
 
-  // Diff operations
   async compareVersions(fromId: number, toId: number): Promise<ContentDiff> {
     const data = await this.initialize();
     
@@ -458,9 +466,20 @@ export class ContentDO {
       throw new Error("Version not found");
     }
 
-    return await this.createVersion(
-      targetVersion.content, 
-      `Reverted to version ${versionId}`
-    );
+    const newVersion: Version = {
+      id: this.getNextVersionId(data),
+      content: targetVersion.content,
+      timestamp: new Date().toISOString(),
+      message: `Reverted to version ${versionId}`,
+      status: targetVersion.status,
+      diff: this.calculateDetailedDiff(
+        data.versions[data.versions.length - 1]?.content || '',
+        targetVersion.content
+      )
+    };
+
+    data.versions.push(newVersion);
+    await this.state.storage.put("content", data);
+    return newVersion;
   }
 }
