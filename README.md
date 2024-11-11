@@ -217,7 +217,7 @@ Plaintext
 
   NODE_VERSION
 	18
-  
+
   NPM_VERSION
 	9
 
@@ -225,4 +225,4 @@ I have deployed it sample here (The link will remain active for a while, but you
 
 Frontend: https://8184d626.version-control-frontend.pages.dev/
 
-Backend: https://content-version-system.shinchan79.workers.dev/
+Backend: https://content-version-system.trinhhaiyen79.workers.dev/
