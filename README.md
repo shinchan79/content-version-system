@@ -183,3 +183,42 @@ All error responses follow this format:
 ## Support
 
 For support, please open an issue in the GitHub repository.
+
+## Frontend if you need it (I deployed it to Cloudflare Pages):
+
+https://github.com/shinchan79/version-control-frontend
+
+Some settings are hardcoded for my use case, but it's easily customizable.
+
+### Settings for Cloudflare Pages:
+
+- Git repository: https://github.com/shinchan79/version-control-frontend
+Build command:npm install && npm run build
+- Build output:out
+- Root directory:
+- Build comments:Enabled
+- Build cache: Disabled
+Branch control
+- Production branch:main
+- Automatic deployments:Enabled
+-Build watch paths: Include paths: *
+- Deploy Hooks: No deploy hooks defined
+- Build system version: Version 2
+
+Variables and Secrets:
+
+Plaintext
+	NEXT_PUBLIC_API_URL
+	https://content-version-system.shinchan79.workers.dev/
+  NEXT_TELEMETRY_DISABLED
+	1
+  NODE_VERSION
+	18
+  NPM_VERSION
+	9
+
+I have deployed it sample here (The link will remain active for a while, but you can always deploy your own):
+
+Frontend: https://8184d626.version-control-frontend.pages.dev/
+
+Backend: https://content-version-system.shinchan79.workers.dev/
