@@ -208,12 +208,16 @@ Branch control
 Variables and Secrets:
 
 Plaintext
+
 	NEXT_PUBLIC_API_URL
 	https://content-version-system.shinchan79.workers.dev/
+
   NEXT_TELEMETRY_DISABLED
 	1
+
   NODE_VERSION
 	18
+  
   NPM_VERSION
 	9
 
