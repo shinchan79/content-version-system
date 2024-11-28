@@ -226,3 +226,69 @@ I have deployed it sample here (The link will remain active for a while, but you
 Frontend: https://1e9af8e6.version-control-frontend.pages.dev/
 
 Backend: https://content-version-system.trinhhaiyen79.workers.dev/
+
+### Some commands to test your app after deploy to Cloudflare Worker:
+
+Here are some commands that you can use to test your project after deployment:
+```sh
+#### CRUD and version management operations: ####
+# 1. CREATE - Create a new version
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Version 1 content", "message": "First version"}' \
+  https://<your-worker-url>/content
+# 2. READ - Fetch the current version
+curl -X GET \
+  https://<your-worker-url>/content/default
+# Fetch the list of all versions
+curl -X GET \
+  https://<your-worker-url>/content/default/versions
+# Fetch a specific version (replace {id} with the actual ID)
+curl -X GET \
+  https://<your-worker-url>/content/default/versions/{id}
+# 3. UPDATE - Revert to an older version (replace {id} with the ID of the version you want to revert to)
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"versionId": {id}}' \
+  https://<your-worker-url>/content/default/revert
+# 4. DELETE - Delete a version (replace {id} with the actual ID)
+curl -X DELETE \
+  https://<your-worker-url>/content/default/versions/{id}
+# 6. PUBLISHING
+# Publish a version -  (replace {id} with the actual ID)
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"publishedBy": "test-user"}' \
+  https://<your-worker-url>/content/default/versions/{id}/publish
+# View publication history
+curl -X GET \
+  https://<your-worker-url>/content/default/publish-history
+# View diff between versions
+# Option 1: E.g. you want to diff from version 2 to version 8
+curl -X GET \
+  https://<your-worker-url>/content/default/versions/8/diff?compare=13
+# Option 2: E.g. you want to diff  8 to version 2
+curl -X GET \
+  https://<your-worker-url>/content/default/versions/2/diff?compare=4
+#### CRUD operations for tags: ####
+# 1. Create a new tag
+curl -X POST "<your-worker-url>/content/versions/tags" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versionId": 1,
+    "name": "v1.0"
+  }'
+# 2. Get all tags
+curl -X GET "https://<your-worker-url>/content/versions/tags"
+# 3. Get tags for specific version
+curl -X GET "https://<your-worker-url>/content/versions/1/tags"
+# 4. Update tag name
+curl -X PUT "https://content-version-system.trinhhaiyen79.workers.dev/content/versions/tags/v1.0" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "newName": "stable"
+  }'
+# 5. Delete tag
+curl -X DELETE "https://<your-worker-url>/content/versions/tags/stable"
+```
+
