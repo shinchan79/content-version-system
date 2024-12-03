@@ -209,6 +209,7 @@ Variables and Secrets:
 
 Plaintext
 
+```
 	NEXT_PUBLIC_API_URL
 	https://content-version-system.shinchan79.workers.dev/
 
@@ -220,6 +221,7 @@ Plaintext
 
   NPM_VERSION
 	9
+```
 
 I have deployed it sample here (The link will remain active for a while, but you can always deploy your own):
 
