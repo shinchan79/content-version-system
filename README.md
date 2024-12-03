@@ -219,9 +219,9 @@ Plaintext
 
 I have deployed it sample here (The link will remain active for a while, but you can always deploy your own):
 
-Frontend: [https://1e9af8e6.version-control-frontend.pages.dev/](https://version-control-frontend-copy.pages.dev/)
+Frontend: https://version-control-frontend-copy.pages.dev/
 
-Backend: [https://content-version-system.trinhhaiyen79.workers.dev/](https://content-version-system.sycu-lee.workers.dev/)
+Backend: https://content-version-system.sycu-lee.workers.dev/
 
 ### Some commands to test your app after deploy to Cloudflare Worker:
 
