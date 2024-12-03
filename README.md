@@ -193,11 +193,12 @@ Some settings are hardcoded for my use case, but it's easily customizable.
 ### Settings for Cloudflare Pages:
 
 - Git repository: https://github.com/shinchan79/version-control-frontend
-Build command:npm install && npm run build
+- Build command:npm install && npm run build
 - Build output:out
 - Root directory:
 - Build comments:Enabled
 - Build cache: Disabled
+
 Branch control
 - Production branch:main
 - Automatic deployments:Enabled
