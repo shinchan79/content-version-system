@@ -188,20 +188,20 @@ For support, please open an issue in the GitHub repository.
 
 https://github.com/shinchan79/version-control-frontend
 
-Some settings are hardcoded for my use case, but it's easily customizable.
+Some URL settings are hardcoded for my use case, but it's easily customizable.
 
 ### Settings for Cloudflare Pages:
 
 - Git repository: https://github.com/shinchan79/version-control-frontend
-- Build command:npm install && npm run build
-- Build output:out
+- Build command: npm install && npm run build
+- Build output: out
 - Root directory:
-- Build comments:Enabled
+- Build comments: Enabled
 - Build cache: Disabled
 
 Branch control
-- Production branch:main
-- Automatic deployments:Enabled
+- Production branch: main
+- Automatic deployments: Enabled
 -Build watch paths: Include paths: *
 - Deploy Hooks: No deploy hooks defined
 - Build system version: Version 2
@@ -219,9 +219,9 @@ Plaintext
 
 I have deployed it sample here (The link will remain active for a while, but you can always deploy your own):
 
-Frontend: https://1e9af8e6.version-control-frontend.pages.dev/
+Frontend: [https://1e9af8e6.version-control-frontend.pages.dev/](https://version-control-frontend-copy.pages.dev/)
 
-Backend: https://content-version-system.trinhhaiyen79.workers.dev/
+Backend: [https://content-version-system.trinhhaiyen79.workers.dev/](https://content-version-system.sycu-lee.workers.dev/)
 
 ### Some commands to test your app after deploy to Cloudflare Worker:
 
