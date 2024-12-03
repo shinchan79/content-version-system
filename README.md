@@ -186,13 +186,13 @@ For support, please open an issue in the GitHub repository.
 
 ## Frontend if you need it (I deployed it to Cloudflare Pages):
 
-https://github.com/shinchan79/version-control-frontend
+https://github.com/shinchan79/version-control-frontend-copy
 
 Some URL settings are hardcoded for my use case, but it's easily customizable.
 
 ### Settings for Cloudflare Pages:
 
-- Git repository: https://github.com/shinchan79/version-control-frontend
+- Git repository: https://github.com/shinchan79/version-control-frontend-copy
 - Build command: npm install && npm run build
 - Build output: out
 - Root directory:
