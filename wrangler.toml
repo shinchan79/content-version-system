@@ -14,4 +14,4 @@ class_name = "ContentDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ContentDO"] 
+new_classes = ["ContentDO"]

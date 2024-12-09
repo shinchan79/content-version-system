@@ -1,10 +1,33 @@
 import { ContentDO } from './contentDO';
+import { DurableObjectNamespace, DurableObjectStub } from '@cloudflare/workers-types';
+import { Version } from './types';
 
-interface Env {
+type Env = {
   CONTENT: DurableObjectNamespace;
+};
+
+// Error handling types and helpers
+interface ErrorWithMessage {
+  message: string;
 }
 
-// HTML template
+function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as Record<string, unknown>).message === 'string'
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  if (isErrorWithMessage(error)) {
+    return error.message;
+  }
+  return 'Unknown error occurred';
+}
+
+// HTML Template & Styling
 const getHtmlTemplate = (content: string, message: string = '', timestamp: string = '') => `
 <!DOCTYPE html>
 <html lang="en">
@@ -59,30 +82,27 @@ const getHtmlTemplate = (content: string, message: string = '', timestamp: strin
         <h2>Current Content:</h2>
         <pre>${content}</pre>
     </div>
-    <a href="http://localhost:3000" class="button">Content Version Management</a>
+  <a href="https://content-version-system.sycu-lee.workers.dev" class="button">Content Version Management</a> # Replace to your worker url
 </body>
 </html>
 `;
 
-// CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, OPTIONS, DELETE',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-// Helper function to get latest published version
-async function getLatestPublishedVersion(contentDO: DurableObjectInstance, origin: string) {
-  const versionsResponse = await contentDO.fetch(new Request(origin + '/content/default/versions'));
-  const versions = await versionsResponse.json();
+async function getLatestPublishedVersion(contentDO: DurableObjectStub, origin: string): Promise<Version | null> {
+  const versionsResponse = await contentDO.fetch(`${origin}/content/default/versions`);
+  const versions: Version[] = await versionsResponse.json(); // Explicitly type the response
 
-  // Filter published versions and get the latest one
-  const publishedVersions = versions.filter((v: any) => v.status === 'published');
+  const publishedVersions = versions.filter(v => v.status === 'published');
   if (publishedVersions.length === 0) {
     return null;
   }
 
-  return publishedVersions.reduce((latest: any, current: any) => 
+  return publishedVersions.reduce((latest, current) => 
     latest.id > current.id ? latest : current
   );
 }
@@ -93,25 +113,26 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url);
-      
+
+      // Handle CORS preflight
       if (request.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
       }
 
-      // Get DO instance
+      // Get Durable Objects instance
       const doId = env.CONTENT.idFromName('default');
       const contentDO = env.CONTENT.get(doId);
 
-      // Root path - show HTML
+      // Handle root path - show HTML view
       if (url.pathname === '/') {
         try {
           const latestPublished = await getLatestPublishedVersion(contentDO, url.origin);
           
           if (latestPublished) {
             const contentResponse = await contentDO.fetch(
-              new Request(`${url.origin}/content/default/versions/${latestPublished.id}`)
+              `${url.origin}/content/default/versions/${latestPublished.id}`
             );
-            const contentData = await contentResponse.json();
+            const contentData: Version = await contentResponse.json(); // Explicitly type the response
             
             return new Response(
               getHtmlTemplate(
@@ -123,15 +144,19 @@ export default {
               }
             );
           } else {
-            return new Response(getHtmlTemplate('No published content available', 'No published versions', ''), {
-              headers: { 'Content-Type': 'text/html' }
-            });
+            return new Response(
+              getHtmlTemplate('No published content available', 'No published versions', ''), {
+                headers: { 'Content-Type': 'text/html' }
+              }
+            );
           }
         } catch (error) {
           console.error('Root error:', error);
-          return new Response(getHtmlTemplate('Error loading content', 'Error occurred', ''), {
-            headers: { 'Content-Type': 'text/html' }
-          });
+          return new Response(
+            getHtmlTemplate('Error loading content', 'Error occurred', ''), {
+              headers: { 'Content-Type': 'text/html' }
+            }
+          );
         }
       }
 
@@ -142,9 +167,9 @@ export default {
           
           if (latestPublished) {
             const contentResponse = await contentDO.fetch(
-              new Request(`${url.origin}/content/default/versions/${latestPublished.id}`)
+              `${url.origin}/content/default/versions/${latestPublished.id}`
             );
-            const contentData = await contentResponse.json();
+            const contentData: Version = await contentResponse.json(); // Explicitly type the response
 
             return new Response(JSON.stringify(contentData), {
               headers: {
@@ -163,7 +188,7 @@ export default {
           }
         } catch (error) {
           console.error('Content default error:', error);
-          return new Response(JSON.stringify({ error: error.message }), {
+          return new Response(JSON.stringify({ error: getErrorMessage(error) }), {
             status: 500,
             headers: {
               'Content-Type': 'application/json',
@@ -173,8 +198,12 @@ export default {
         }
       }
 
-      // Forward all other requests to DO
-      const response = await contentDO.fetch(request);
+      // Forward all other requests to Durable Objects
+      const response = await contentDO.fetch(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body
+      });
       
       // Add CORS headers
       const newResponse = new Response(response.body, response);
@@ -188,7 +217,7 @@ export default {
       console.error('Worker error:', error);
       return new Response(JSON.stringify({ 
         error: 'Internal Server Error',
-        message: error.message 
+        message: getErrorMessage(error)
       }), { 
         status: 500,
         headers: {
