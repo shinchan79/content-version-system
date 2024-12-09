@@ -5,74 +5,92 @@ A Cloudflare Workers-based content versioning system that provides Git-like vers
 ## Core Features
 
 ### Version Control
-- **Full Version History**: Track all changes with timestamps and commit messages
-- **Diff Comparison**: Compare any two versions to see exact changes
-- **Revert Capability**: Roll back to any previous version instantly
+- Full Version History: Track all changes with timestamps and commit messages
+- Diff Comparison: Compare any two versions to see exact changes
+- Revert Capability: Roll back to any previous version instantly
 
 ### Content Management
-- **Publishing Workflow**: Support for Draft, Published, and Archived states
-- **Tagging System**: Tag important versions for easy reference
-- **Change Tracking**: Detailed history of all modifications
+- Publishing Workflow: Support for Draft, Published, and Archived states
+- Tagging System: Tag important versions for easy reference
+- Change Tracking: Detailed history of all modifications
 
 ### Advanced Features
-- **Detailed Diffs**: View exact changes between versions
-- **Publishing History**: Track when and who published each version
-- **API-First Design**: RESTful API for easy integration
+- Detailed Diffs: View exact changes between versions
+- Publishing History: Track when and who published each version
+- API-First Design: RESTful API for easy integration
 
 ## API Endpoints
 
 ### Content Operations
-```typescript
+```
 // Create new version
 POST /content
 Body: { content: string, message?: string }
 
+// Get current content
+GET /content/default
+
 // Get all versions
-GET /content/{id}/versions
+GET /content/default/versions
 
 // Get specific version
-GET /content/{id}/versions/{versionId}
+GET /content/default/versions/{versionId}
 
 // Delete version
-DELETE /content/{id}/versions/{versionId}
+DELETE /content/default/versions/{versionId}
 ```
 
-### Version Control
-```typescript
-// Revert to version
-POST /content/{id}/revert
-Body: { versionId: number }
+### Tag Management
+```
+// Get all tags
+GET /content/versions/tags
+
+// Get version tags
+GET /content/versions/{versionId}/tags
+
+// Create tag
+POST /content/versions/tags
+Body: { versionId: number, name: string }
+
+// Update tag
+PUT /content/versions/tags/{tagName}
+Body: { newName: string }
+
+// Delete tag
+DELETE /content/versions/tags/{tagName}
+```
+
+### Publishing Operations
+```
+// Publish version
+POST /content/default/versions/{versionId}/publish
+Body: { publishedBy: string }
+
+// Unpublish version
+POST /content/default/versions/{versionId}/unpublish
+
+// Get publish history
+GET /content/default/publish-history
+```
+
+### Version Control Operations
+```
+// Get version diff
+GET /content/default/versions/{versionId}/diff?compare={compareId}
 
 // Compare versions
 GET /content/{id}/compare?from={fromId}&to={toId}
 
-// Get diff
-GET /content/{id}/diff
-```
-
-### Publishing
-```typescript
-// Publish version
-POST /content/{id}/versions/{versionId}/publish
-Body: { publishedBy: string }
-
-// Get publish history
-GET /content/{id}/publish-history
-```
-
-### Tags
-```typescript
-// Add tag
-POST /content/{id}/tags
-Body: { versionId: number, tagName: string }
+// Revert to version
+POST /content/default/revert
+Body: { versionId: number }
 ```
 
 ## Tech Stack
-
-- **Runtime**: Cloudflare Workers
-- **Storage**: Durable Objects
-- **Language**: TypeScript
-- **Build Tool**: Wrangler CLI
+- Runtime: Cloudflare Workers
+- Storage: Durable Objects
+- Language: TypeScript
+- Build Tool: Wrangler CLI
 
 ## Getting Started
 
@@ -85,63 +103,57 @@ Body: { versionId: number, tagName: string }
 ### Installation
 
 1. Clone the repository
-```bash
+```
 git clone https://github.com/yourusername/content-version-system.git
 cd content-version-system
 ```
 
 2. Install dependencies
-```bash
+```
 npm install
 ```
 
 3. Configure Wrangler
-```bash
+```
 wrangler login
 ```
 
-4. Start development server
-```bash
-npm run dev
-```
-
 ### Development Commands
-
-```bash
+```
 # Start development server
-npm run dev
+npx wrangler dev
 
-# Run tests
-npm test
+# Deploy to Cloudflare
+npx wrangler deploy
 
-# Format code
-npm run format
+# Generate types
+npm run cf-typegen
 
 # Lint code
 npm run lint
 
-# Build for production
-npm run build
+# Format code
+npm run format
 
-# Deploy
-npm run deploy
+# Run tests
+npm run test
 ```
 
-## Response Types
+## Core Types
 
-### Version Object
+### Version
 ```typescript
 interface Version {
   id: number;
   content: string;
   timestamp: string;
   message: string;
-  status: VersionStatus;
   diff?: ContentDiff;
+  status: VersionStatus;
 }
 ```
 
-### Diff Object
+### ContentDiff
 ```typescript
 interface ContentDiff {
   from: string;
@@ -153,24 +165,52 @@ interface ContentDiff {
     timestamp: string;
   };
   patch: string;
+  hunks: Array<{
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
+}
+```
+
+### Tag
+```typescript
+interface Tag {
+  name: string;
+  versionId: number;
+  createdAt: string;
+  updatedAt?: string;
 }
 ```
 
 ## Error Handling
 
 The API uses standard HTTP status codes:
-- `200`: Success
-- `400`: Bad Request
-- `404`: Not Found
-- `500`: Server Error
+
+- 200: Success
+- 400: Bad Request
+- 404: Not Found
+- 500: Server Error
 
 All error responses follow this format:
 ```typescript
-{
-  success: false,
-  error: string
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
 }
 ```
+
+## CORS Support
+The API includes CORS headers for cross-origin requests with the following configuration:
+- Allow-Origin: *
+- Allow-Methods: GET, HEAD, POST, PUT, OPTIONS, DELETE
+- Allow-Headers: Content-Type
+
+## HTML Interface
+A basic HTML interface is available at the root path ('/') showing the latest published content with metadata.
 
 ## Contributing
 
@@ -181,7 +221,6 @@ All error responses follow this format:
 5. Open a Pull Request
 
 ## Support
-
 For support, please open an issue in the GitHub repository.
 
 ## Frontend if you need it (I deployed it to Cloudflare Pages):
